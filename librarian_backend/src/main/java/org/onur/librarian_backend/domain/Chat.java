@@ -16,13 +16,15 @@ public class Chat {
     @OneToMany(mappedBy = "chat", cascade = CascadeType.ALL, orphanRemoval = true)
     private final List<Message> messages = new ArrayList<>();
     private Instant updatedAt;
+    private UUID ownerId;
 
     public Chat() {}
 
-    public Chat(Message message) {
+    public Chat(Message message, UUID ownerId) {
         addMessage(message);
         this.title = generateTitle(messages);
         this.updatedAt = Instant.now();
+        this.ownerId = ownerId;
     }
 
     public String getTitle() { return title; }
@@ -34,6 +36,10 @@ public class Chat {
 
     public UUID getId() { return id; }
     public Instant getUpdatedAt() { return updatedAt; }
+
+    public UUID getOwnerId() {
+        return ownerId;
+    }
 
     public void addMessage(Message message) {
         messages.add(message);

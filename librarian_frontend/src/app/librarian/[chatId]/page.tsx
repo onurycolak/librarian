@@ -1,13 +1,13 @@
-import { LibrarianClient } from '../LibrarianClient';
+import { LibrarianClient } from '@/app/librarian/LibrarianClient';
 
-type PageProps = {
-  params: Promise<{
+type LibrarianChatPageProps = {
+  params: {
     chatId: string;
-  }>;
+  };
 };
 
-export default async function LibrarianChatPage({ params }: PageProps) {
-  const { chatId } = await params;
+export default function LibrarianChatPage({ params }: LibrarianChatPageProps) {
+  const { chatId } = params;
 
   return <LibrarianClient activeChatId={chatId} />;
 }

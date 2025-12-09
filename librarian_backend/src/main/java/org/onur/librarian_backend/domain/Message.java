@@ -12,7 +12,8 @@ public class Message {
     @GeneratedValue
     private UUID id;
     private String content;
-    private String role;
+    @Enumerated(EnumType.STRING)
+    private Role role;
     @ManyToOne
     @JoinColumn(name = "chat_id")
     private Chat chat;
@@ -20,14 +21,14 @@ public class Message {
 
     public Message() {}
 
-    public Message(String content, String role) {
+    public Message(String content, Role role) {
         this.content = content;
         this.role = role;
         this.updatedAt = Instant.now();
     }
 
     public String getContent() { return content; }
-    public String getRole() { return role; }
+    public Role getRole() { return role; }
     public Instant getUpdatedAt() { return updatedAt; }
 
     public Chat getChat() {
@@ -36,5 +37,9 @@ public class Message {
 
     void setChat(Chat chat) {
         this.chat = chat;
+    }
+
+    public UUID getId() {
+        return id;
     }
 }

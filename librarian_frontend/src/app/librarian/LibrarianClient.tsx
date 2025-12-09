@@ -10,15 +10,25 @@ type RecentChat = {
   updatedAt: string;
 };
 
+type BackendRole = 'User' | 'Assistant';
+
+type MessageResponseDto = {
+  response: string;
+  chatID: string;
+  messageID: string;
+  role: BackendRole;
+  updatedAt: string;
+};
+
 type ChatMessage = {
   content: string;
-  role: string;
+  role: 'user' | 'assistant';
 };
 
 type ChatResponse = {
   id: string;
   title: string;
-  messages: ChatMessage[];
+  messages: MessageResponseDto[];
   updatedAt: string;
 };
 
@@ -38,6 +48,7 @@ export function LibrarianClient({ activeChatId }: Props) {
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
+  // ---- load recents ----
   useEffect(() => {
     const fetchRecents = async () => {
       try {
@@ -64,18 +75,53 @@ export function LibrarianClient({ activeChatId }: Props) {
     fetchRecents();
   }, []);
 
+  // ---- load chat history when activeChatId changes ----
+  useEffect(() => {
+    const chatId = activeChatId;
+    if (!chatId) {
+      // /librarian (new chat): empty state
+      setMessages([]);
+      return;
+    }
+
+    const fetchChat = async () => {
+      try {
+        const res = await fetch(
+          `${BACKEND_BASE_URL}/api/librarian/chat/${chatId}`,
+        );
+        if (!res.ok) {
+          throw new Error(`Chat ${chatId} returned ${res.status}`);
+        }
+
+        const data = (await res.json()) as ChatResponse;
+        const mapped: ChatMessage[] = (data.messages ?? []).map((m) => ({
+          content: m.response,
+          role: m.role === 'User' ? 'user' : 'assistant',
+        }));
+        setMessages(mapped);
+      } catch (err) {
+        console.error(err);
+        // keep whatever was on screen; no UI copy changes
+      }
+    };
+
+    fetchChat();
+  }, [activeChatId]);
+
+  // ---- UI actions ----
+
   const handleNewChat = () => {
-    // On /librarian (no active chat): no-op
+    // On /librarian (no active chat): nothing to reset
     if (!activeChatId) return;
 
-    // On /librarian/:id -> go back to fresh state
+    // On /librarian/:id -> clear and go back to fresh state
     setMessages([]);
     setPendingMessage('');
     router.push('/librarian');
   };
 
   const handleSelectChat = (id: string) => {
-    // For now we don’t reload messages; just clear and route
+    // Clear local state and let the new route re-fetch history
     setMessages([]);
     setPendingMessage('');
     router.push(`/librarian/${id}`);
@@ -86,39 +132,60 @@ export function LibrarianClient({ activeChatId }: Props) {
     if (!text || isSending) return;
 
     setIsSending(true);
+
     try {
-      if (!activeChatId) {
-        // NEW CHAT FLOW: send first message, get id & messages, route there
-        const res = await fetch(`${BACKEND_BASE_URL}/api/librarian/chat`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            firstMessage: {
-              content: text,
-              role: 'user',
-            },
-          }),
-        });
+      const isNewChat = !activeChatId;
 
-        if (!res.ok) {
-          throw new Error(`New chat returned ${res.status}`);
+      // Optimistic user bubble
+      setMessages((prev) => [...prev, { content: text, role: 'user' }]);
+      setPendingMessage('');
+
+      const body: { chatId?: string; message: string } = { message: text };
+      if (!isNewChat && activeChatId) {
+        body.chatId = activeChatId;
+      }
+
+      const res = await fetch(`${BACKEND_BASE_URL}/api/librarian/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        throw new Error(
+          `${isNewChat ? 'New chat' : 'Existing chat'} returned ${res.status}`,
+        );
+      }
+
+      const data = (await res.json()) as MessageResponseDto;
+
+      // Assistant reply bubble
+      setMessages((prev) => [
+        ...prev,
+        {
+          content: data.response,
+          role: data.role === 'User' ? 'user' : 'assistant',
+        },
+      ]);
+
+      // First message in a new chat -> navigate to /librarian/{chatID}
+      if (isNewChat && data.chatID) {
+        router.push(`/librarian/${data.chatID}`);
+      }
+
+      // Refresh recents quietly
+      try {
+        const recentsRes = await fetch(
+          `${BACKEND_BASE_URL}/api/librarian/chat/recents`,
+        );
+        if (recentsRes.ok) {
+          const recentsData = (await recentsRes.json()) as RecentChat[];
+          setRecents(recentsData);
         }
-
-        const data = (await res.json()) as ChatResponse;
-        if (!data.id) {
-          throw new Error('Backend did not return an id');
-        }
-
-        setMessages(data.messages ?? []);
-        setPendingMessage('');
-        router.push(`/librarian/${data.id}`);
-      } else {
-        // EXISTING CHAT FLOW (not wired to backend yet)
-        console.log('Would send message to chat', activeChatId, text);
-        setMessages((prev) => [...prev, { content: text, role: 'user' }]);
-        setPendingMessage('');
+      } catch (err) {
+        console.error('Failed to refresh recents after send', err);
       }
     } catch (err) {
       console.error(err);
@@ -126,6 +193,8 @@ export function LibrarianClient({ activeChatId }: Props) {
       setIsSending(false);
     }
   };
+
+  // ---- render helpers ----
 
   const renderSidebarContent = () => {
     if (loadingRecents) {
@@ -180,7 +249,7 @@ export function LibrarianClient({ activeChatId }: Props) {
       return (
         <div className={styles.messages}>
           {hasActiveChat
-            ? 'Messages will appear here once we wire the LLM backend.'
+            ? 'No messages yet in this chat.'
             : 'Your first message will start a new chat with the Librarian.'}
         </div>
       );
@@ -209,6 +278,8 @@ export function LibrarianClient({ activeChatId }: Props) {
     );
   };
 
+  // ---- layout (unchanged) ----
+
   return (
     <div className={styles.page}>
       <header className={styles.navbar}>
@@ -230,7 +301,7 @@ export function LibrarianClient({ activeChatId }: Props) {
             </button>
           </div>
 
-          {renderSidebarContent()}
+          <div className={styles.sidebarBody}>{renderSidebarContent()}</div>
         </aside>
 
         {/* Main chat area */}

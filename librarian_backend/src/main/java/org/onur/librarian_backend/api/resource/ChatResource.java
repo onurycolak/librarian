@@ -1,40 +1,53 @@
 package org.onur.librarian_backend.api.resource;
 
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
+import jakarta.inject.Inject;
+import jakarta.validation.Valid;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.POST;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.UUID;
+
+import org.onur.librarian_backend.api.request.ChatRequest;
+import org.onur.librarian_backend.api.response.MessageResponse;
+import org.onur.librarian_backend.application.ChatService;
 import org.onur.librarian_backend.domain.Chat;
 import org.onur.librarian_backend.domain.Message;
 import org.onur.librarian_backend.api.response.ChatResponse;
 import org.onur.librarian_backend.api.response.ChatSummaryResponse;
+import org.onur.librarian_backend.domain.Role;
 
 @Path("/api/librarian/chat")
 public class ChatResource {
+    @Inject
+    ChatService chatService;
+
     @POST
     @Produces(MediaType.APPLICATION_JSON)
-    public Response chat() {
-        Chat chat = new Chat(new Message("Hello", "user"));
-        chat.addMessage(new Message("Hello", "assistant"));
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response chat(@Valid ChatRequest request) {
+        Message answer = chatService.converse(request);
 
 
-        return Response.ok(ChatResponse.from(chat)).build();
+        return Response.status(Response.Status.OK).entity(MessageResponse.from(answer)).build();
     }
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/recents")
     public Response recents() {
-        List<Chat> chats = new ArrayList<>();
-        Chat chat = new Chat(new Message("Hello 2", "user"));
-        chat.addMessage(new Message("Hello2", "assistant"));
+        List<Chat> recentChats = chatService.getRecentsByUserId();
 
-        chats.add(chat);
+        return Response.ok(ChatSummaryResponse.from(recentChats)).build();
+    }
 
-        return Response.ok(ChatSummaryResponse.from(chats)).build();
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/{chatId}")
+    public Response recentChat(@PathParam("chatId") UUID chatId) {
+        Chat recentChat = chatService.getChat(chatId);
+
+        return Response.ok(ChatResponse.from(recentChat)).build();
     }
 }

@@ -9,7 +9,7 @@ import java.util.UUID;
 
 public class ChatResponse {
     private String title;
-    private List<Message> messages;
+    private List<MessageResponse> messages;
     private UUID id;
     private Instant updatedAt;
 
@@ -17,7 +17,9 @@ public class ChatResponse {
         ChatResponse response = new ChatResponse();
 
         response.title = chat.getTitle();
-        response.messages = chat.getMessages();
+        response.messages = chat.getMessages().stream()
+                .map(MessageResponse::from)
+                .toList();
         response.id = chat.getId();
         response.updatedAt = chat.getUpdatedAt();
         return response;
@@ -27,7 +29,7 @@ public class ChatResponse {
         return title;
     }
 
-    public List<Message> getMessages() {
+    public List<MessageResponse> getMessages() {
         return messages;
     }
 
